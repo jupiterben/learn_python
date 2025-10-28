@@ -1,0 +1,15 @@
+# learn_python - 核心依赖
+# 遵循项目宪章：零依赖原则
+
+# 核心功能（生产环境）
+# 无外部依赖 - 仅使用 Python 标准库
+
+# 开发工具（仅开发环境，使用 pip install -e ".[dev]" 安装）
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# black>=23.0.0
+# mypy>=1.0.0
+# radon>=5.0.0
+# pipdeptree>=2.0.0
+# pip-audit>=2.0.0
+
