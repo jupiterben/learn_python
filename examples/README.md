@@ -57,32 +57,126 @@ result = app.process("数据")
 | 代码简洁度 | ✅ 更简洁 | 一般 |
 | 多重继承兼容 | ✅ 友好 | ⚠️ 可能冲突 |
 
-### 2. 运行示例
+### 3. 运行示例
 
 ```bash
-# 简单日志示例（继承方式）
+# 简单日志示例
 PYTHONPATH=. python3 examples/simple_logging.py
 
-# 装饰器方式示例（推荐）
-PYTHONPATH=. python3 examples/decorator_style.py
+# Feature共享数据示例
+PYTHONPATH=. python3 examples/shared_data.py
+
+# Stage特定处理器示例（推荐查看）
+PYTHONPATH=. python3 examples/stage_specific_handlers.py
+
+# 多Stage处理器示例
+PYTHONPATH=. python3 examples/multi_stage_handler.py
+
+# 通配符匹配示例（推荐查看）
+PYTHONPATH=. python3 examples/wildcard_stage.py
 ```
 
 ## Feature开发模板
+
+### 1. 通用处理器（处理所有stage）
 
 ```python
 class MyFeature(Feature):
     def __init__(self):
         super().__init__()  # 必须调用父类初始化
-    
+
     def before_stage(self, context):
         # 在方法执行前做什么
         pass
-    
+
     def after_stage(self, context):
         # 在方法执行后做什么
         # context.result 包含返回值
         pass
 ```
+
+### 2. Stage特定处理器（针对特定stage）
+
+```python
+from aoplib import Feature, before_stage, after_stage
+
+class MyFeature(Feature):
+    def __init__(self):
+        super().__init__()
+
+    @before_stage("login")
+    def handle_login_before(self, context):
+        # 只在 stage 名称为 "login" 时执行
+        print(f"用户登录: {context.args}")
+
+    @after_stage("process")
+    def handle_process_after(self, context):
+        # 只在 stage 名称为 "process" 时执行
+        print(f"处理完成: {context.result}")
+
+    @before_stage(["create", "update", "delete"])
+    def handle_crud_before(self, context):
+        # 在 create、update、delete 任意一个 stage 时都会执行
+        print(f"数据修改操作: {context.stage_name}")
+
+    @before_stage("process_*")
+    def handle_all_process(self, context):
+        # 使用通配符：匹配所有 process_ 开头的 stage
+        print(f"处理 {context.stage_name}")
+
+    @after_stage("*_data")
+    def handle_all_data_ops(self, context):
+        # 匹配所有 _data 结尾的 stage
+        print(f"数据操作: {context.stage_name}")
+
+    # 没有特定handler的stage会被忽略
+```
+
+**对比**：
+
+| 方式 | 适用场景 | 示例 |
+|------|---------|------|
+| 通用处理器 | 所有stage都需要相同逻辑 | 日志、计时 |
+| 单个stage处理器 | 某个stage需要特殊逻辑 | `@before_stage("login")` |
+| 多个stage处理器 | 一组stage需要相同逻辑 | `@before_stage(["create", "update", "delete"])` |
+| 通配符处理器 | 匹配一类stage名称模式 | `@before_stage("process_*")` |
+| 混合使用 | 部分stage特殊处理，其他使用通用逻辑 | 精确 + 通配符 + 通用 |
+
+**通配符规则**：
+- `*` - 匹配任意数量的任意字符
+- `?` - 匹配单个任意字符
+- 精确匹配优先级 > 通配符匹配 > 通用处理器
+
+### 3. 混合使用（推荐模式）
+
+```python
+class LoggingFeature(Feature):
+    def __init__(self):
+        super().__init__()
+
+    @before_stage("login")
+    def log_login(self, context):
+        # login stage 特殊处理
+        print(f"[安全] 登录尝试: {context.args[0]}")
+
+    @after_stage("delete_user")
+    def log_deletion(self, context):
+        # delete_user stage 特殊处理
+        print(f"[警告] 用户删除: {context.result}")
+
+    def before_stage(self, context):
+        # 其他所有stage的通用处理
+        print(f"[LOG] {context.stage_name} 开始")
+
+    def after_stage(self, context):
+        # 其他所有stage的通用处理
+        print(f"[LOG] {context.stage_name} 完成")
+```
+
+**执行规则**：
+- 如果有 `@before_stage(stage_name)` 装饰的方法，**只执行**装饰的方法
+- 如果没有特定装饰器，**执行**通用 `before_stage()` 方法
+- `after_stage` 同理
 
 ## Feature启用/禁用
 
