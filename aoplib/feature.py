@@ -5,6 +5,8 @@ from typing import Any
 from abc import ABC
 from functools import wraps
 
+from aoplib.context import StageContext
+
 
 class Feature(ABC):
     """Feature抽象基类，定义拦截钩子接口"""
@@ -12,11 +14,11 @@ class Feature(ABC):
     def __init__(self):
         self.enabled = True
 
-    def before_stage(self, context):
+    def before_stage(self, context: StageContext):
         """在stage执行前调用，可选重写"""
         pass
 
-    def after_stage(self, context):
+    def after_stage(self, context: StageContext):
         """在stage执行后调用，可选重写"""
         pass
 
@@ -28,7 +30,7 @@ class Feature(ABC):
         """禁用Feature"""
         self.enabled = False
 
-    def is_enabled(self):
+    def is_enabled(self, context: StageContext):
         """查询Feature是否启用"""
         return self.enabled
 

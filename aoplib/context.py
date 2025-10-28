@@ -1,8 +1,8 @@
 """
 Stage执行上下文
 """
-from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional, Dict
 
 
 @dataclass
@@ -15,4 +15,5 @@ class StageContext:
     kwargs: dict                       # 关键字参数
     result: Any = None                 # 方法返回值(after_stage时有效)
     exception: Optional[Exception] = None  # 异常对象(如有)
+    data: Dict[str, Any] = field(default_factory=dict)  # Feature共享数据
 

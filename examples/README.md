@@ -113,4 +113,31 @@ if feature.is_enabled():
 - `kwargs`: 关键字参数
 - `result`: 返回值(after_stage时有效)
 - `exception`: 异常对象(如有)
+- `data`: Feature共享数据字典(Dict[str, Any])
+
+## Feature共享数据
+
+Feature之间可以通过 `context.data` 字典共享数据：
+
+```python
+class TimingFeature(Feature):
+    def before_stage(self, context):
+        context.data['start_time'] = time.time()
+    
+    def after_stage(self, context):
+        elapsed = time.time() - context.data['start_time']
+        context.data['elapsed_time'] = elapsed  # 供其他Feature使用
+
+class LoggingFeature(Feature):
+    def after_stage(self, context):
+        # 读取Timing存储的数据
+        elapsed = context.data.get('elapsed_time')
+        if elapsed:
+            print(f"耗时: {elapsed:.4f}秒")
+```
+
+**优势**:
+- Feature协作：一个Feature提供数据，另一个使用
+- 避免污染instance：不在对象上添加临时属性
+- 数据隔离：每次调用的data独立，不会相互干扰
 
