@@ -43,7 +43,8 @@ class CRUDFeature(Feature):
         """数据修改后的处理"""
         elapsed = __import__('time').time() - context.data['start_time']
         self.modified_count += 1
-        print(f"[CRUD] {context.stage_name}完成，耗时: {elapsed:.4f}秒，累计修改: {self.modified_count}次")
+        print(
+            f"[CRUD] {context.stage_name}完成，耗时: {elapsed:.4f}秒，累计修改: {self.modified_count}次")
 
     @after_stage("read")
     def after_read(self, context):
@@ -143,4 +144,3 @@ if __name__ == "__main__":
     print("  3. 易于维护 - 统一修改一组stage的处理逻辑")
     print("  4. 灵活组合 - 既可单个stage，也可多个stage")
     print("=" * 60)
-

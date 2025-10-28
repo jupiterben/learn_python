@@ -1,13 +1,11 @@
 """
 Feature基类和AOPClass
 """
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Callable
 from abc import ABC
 from functools import wraps
 from fnmatch import fnmatch
-
-if TYPE_CHECKING:
-    from aoplib.stage import StageContext
+from aoplib.stage import StageContext
 
 
 # Stage特定的方法装饰器
