@@ -36,7 +36,7 @@ def stage(name=None):
             return data
     """
     def decorator(func):
-        stage_name = name if name is not None else func.__name__
+        stage_name = name if name is not None else func.__qualname__
 
         @wraps(func)
         def wrapper(self, *args, **kwargs):
