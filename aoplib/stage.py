@@ -3,7 +3,7 @@ Stage装饰器
 """
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Dict
+from typing import Any, Callable, List, Optional, Dict
 
 
 @dataclass
@@ -44,6 +44,7 @@ def stage(name=None):
             if not hasattr(self, '_features'):
                 return func(self, *args, **kwargs)
 
+            features = self._features
             # 构造上下文
             context = StageContext(
                 stage_name=stage_name,
@@ -54,8 +55,8 @@ def stage(name=None):
             )
 
             # 调用before_stage钩子
-            for feature in self._features:
-                if feature.is_enabled():
+            for feature in features:
+                if feature.is_enabled(context):
                     feature.before_stage(context)
 
             # 执行原方法
@@ -63,8 +64,8 @@ def stage(name=None):
             context.result = result
 
             # 调用after_stage钩子
-            for feature in self._features:
-                if feature.is_enabled():
+            for feature in features:
+                if feature.is_enabled(context):
                     feature.after_stage(context)
 
             return result

@@ -9,15 +9,15 @@ class SecurityFeature_Old(Feature):
     def __init__(self):
         super().__init__()
 
-    @before_stage("login")
+    @before_stage("Service.login")
     def handle_login(self, context):
         print("[安全] 认证操作: login")
 
-    @before_stage("logout")
+    @before_stage("Service.logout")
     def handle_logout(self, context):
         print("[安全] 认证操作: logout")
 
-    @before_stage("register")
+    @before_stage("Service.register")
     def handle_register(self, context):
         print("[安全] 认证操作: register")
 
@@ -27,7 +27,7 @@ class SecurityFeature_New(Feature):
     def __init__(self):
         super().__init__()
 
-    @before_stage(["login", "logout", "register"])
+    @before_stage(["Service.login", "Service.logout", "Service.register"])
     def handle_auth(self, context):
         print(f"[安全] 认证操作: {context.stage_name}")
 

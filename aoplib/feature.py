@@ -80,6 +80,7 @@ class Feature(ABC):
 
     def __init__(self):
         self.enabled = True
+        self.match_tags = []
         # 精确匹配的handler映射
         self._before_handlers = {}
         self._after_handlers = {}
@@ -113,7 +114,7 @@ class Feature(ABC):
                         else:
                             self._after_handlers[stage_name] = attr
 
-    def before_stage(self, context: "StageContext"):
+    def before_stage(self, context: StageContext):
         """在stage执行前调用"""
         # 1. 先尝试精确匹配
         handler = self._before_handlers.get(context.stage_name)
@@ -127,7 +128,7 @@ class Feature(ABC):
                 handler(context)
                 return
 
-    def after_stage(self, context: "StageContext"):
+    def after_stage(self, context: StageContext):
         """在stage执行后调用"""
         # 1. 先尝试精确匹配
         handler = self._after_handlers.get(context.stage_name)
@@ -149,43 +150,81 @@ class Feature(ABC):
         """禁用Feature"""
         self.enabled = False
 
-    def is_enabled(self):
+    def filter(self, context: StageContext):
+        """过滤Feature"""
+        if not self.enabled:
+            return False
+        if self.match_tags:
+            for tag in self.match_tags:
+                if tag in context.stage_tags:
+                    return False
+        return True
+
+    def is_enabled(self, context: StageContext):
         """查询Feature是否启用"""
-        return self.enabled
+        return True
 
 
-def aop_class(cls):
+def aop_class(cls=None, features=None):
     """
     类装饰器：为类添加AOP能力，不需要继承AOPClass
 
     使用方式:
+        # 方式1: 不带参数
         @aop_class
         class MyApp:
             @stage
             def process(self, data):
                 return data
+
+        # 方式2: 带features列表
+        @aop_class(features=[LogFeature(), CacheFeature()])
+        class MyApp:
+            @stage
+            def process(self, data):
+                return data
     """
-    # 保存原始__init__
-    original_init = cls.__init__
+    def decorator(target_cls):
+        # 保存原始__init__
+        original_init = target_cls.__init__
 
-    @wraps(original_init)
-    def new_init(self, *args, **kwargs):
-        # 初始化Feature列表
-        self._features = []
-        # 调用原始__init__
-        original_init(self, *args, **kwargs)
+        @wraps(original_init)
+        def new_init(self, *args, **kwargs):
+            # 初始化Feature列表
+            self._features = []
+            # 添加Features
+            if features:
+                for feature in features:
+                    # 如果是Feature类，实例化
+                    if isinstance(feature, type) and issubclass(feature, Feature):
+                        _add_feature(self, feature())
+                    # 如果已经是Feature实例，直接添加
+                    elif isinstance(feature, Feature):
+                        _add_feature(self, feature)
+            # 调用原始__init__
+            original_init(self, *args, **kwargs)
 
-    # 替换__init__
-    cls.__init__ = new_init
+        # 替换__init__
+        target_cls.__init__ = new_init
 
-    # 添加Feature管理方法
-    cls.add_feature = lambda self, feature: _add_feature(self, feature)
-    cls.remove_feature = lambda self, feature: _remove_feature(self, feature)
-    cls.get_features = lambda self: list(self._features)
-    cls.has_feature = lambda self, feature: feature in self._features
-    cls.clear_features = lambda self: self._features.clear()
+        # 添加Feature管理方法
+        target_cls.add_feature = lambda self, feature: _add_feature(
+            self, feature)
+        target_cls.remove_feature = lambda self, feature: _remove_feature(
+            self, feature)
+        target_cls.get_features = lambda self: list(self._features)
+        target_cls.has_feature = lambda self, feature: feature in self._features
+        target_cls.clear_features = lambda self: self._features.clear()
 
-    return cls
+        return target_cls
+
+    # 支持 @aop_class 和 @aop_class(features=[...]) 两种用法
+    if cls is not None:
+        # @aop_class 直接装饰类
+        return decorator(cls)
+    else:
+        # @aop_class(features=[...]) 带参数
+        return decorator
 
 
 # 辅助方法

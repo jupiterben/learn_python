@@ -62,9 +62,9 @@ class UniversalLogger(Feature):
     def log_all_after(self, context):
         """匹配所有stage"""
         print(f"[全局] 退出: {context.stage_name} -> {context.result}")
+uLogger = UniversalLogger()
 
-
-@aop_class
+@aop_class(features=[uLogger])
 class DataService:
     """数据服务"""
 
