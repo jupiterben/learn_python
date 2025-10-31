@@ -13,3 +13,6 @@
 # pipdeptree>=2.0.0
 # pip-audit>=2.0.0
 
+openpyxl
+requests
+Pillow
