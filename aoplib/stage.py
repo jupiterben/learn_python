@@ -2,24 +2,12 @@
 Stage装饰器
 """
 from functools import wraps
-from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Dict
+from typing import List, Optional
+from aoplib.context import StageContext, StageInfo
+from aoplib.feature import Feature
 
 
-@dataclass
-class StageContext:
-    """Stage执行上下文，传递给Feature钩子"""
-    stage_name: str                    # Stage名称
-    instance: Any                      # 对象实例(self)
-    method: Callable                   # 原始方法
-    args: tuple                        # 位置参数(不含self)
-    kwargs: dict                       # 关键字参数
-    result: Any = None                 # 方法返回值(after_stage时有效)
-    exception: Optional[Exception] = None  # 异常对象(如有)
-    data: Dict[str, Any] = field(default_factory=dict)  # Feature共享数据
-
-
-def stage(name=None):
+def stage(*tags):
     """
     标记方法为stage，启用Feature拦截
 
@@ -36,18 +24,28 @@ def stage(name=None):
             return data
     """
     def decorator(func):
-        stage_name = name if name is not None else func.__qualname__
+        stage_name = func.__qualname__
 
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            # 快速路径：没有_features属性时直接执行
-            if not hasattr(self, '_features'):
+            all_features: List[Feature] = []
+
+            # 收集实例级别的features
+            if hasattr(self, '_features'):
+                instance_features = getattr(self, '_features')
+                if isinstance(instance_features, list):
+                    all_features.extend(instance_features)
+
+            features = [
+                f for f in all_features if f.enabled and f.filter(stage_name, tags)]
+            if not features:
                 return func(self, *args, **kwargs)
 
-            features = self._features
+            stage_info = StageInfo(name=stage_name, tags=tags or [
+            ], simple_name=stage_name.split('.')[-1])
             # 构造上下文
             context = StageContext(
-                stage_name=stage_name,
+                stage_info=stage_info,
                 instance=self,
                 method=func,
                 args=args,
@@ -64,7 +62,7 @@ def stage(name=None):
             context.result = result
 
             # 调用after_stage钩子
-            for feature in features:
+            for feature in reversed(features):
                 if feature.is_enabled(context):
                     feature.after_stage(context)
 

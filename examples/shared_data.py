@@ -1,7 +1,7 @@
 """
 Feature 之间共享数据示例
 """
-from aoplib import stage, Feature, aop_class
+from aoplib import stage, Feature, features
 import time
 
 
@@ -88,7 +88,7 @@ class MetricsFeature(Feature):
         print(f"[METRICS] 收集数据: {metric}")
 
 
-@aop_class
+@features(TimingFeature(), LoggingFeature())
 class Calculator:
     """计算器示例"""
 
@@ -116,8 +116,6 @@ if __name__ == "__main__":
     print("=" * 60)
 
     calc = Calculator()
-    calc.add_feature(TimingFeature()).add_feature(LoggingFeature())
-
     result = calc.factorial(5)
     print(f"\n结果: {result}\n")
 
@@ -126,11 +124,9 @@ if __name__ == "__main__":
     print("=" * 60)
 
     calc2 = Calculator()
-    timing = TimingFeature()
     cache = CacheFeature()
     metrics = MetricsFeature()
-
-    calc2.add_feature(timing).add_feature(cache).add_feature(metrics)
+    calc2.add_feature(cache).add_feature(metrics)
 
     # 第一次调用（未缓存）
     print("\n--- 第一次调用 fibonacci(10) ---")
