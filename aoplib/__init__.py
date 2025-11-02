@@ -12,7 +12,9 @@ from .feature import (
     after_stage,
     add_feature,
     remove_feature,
-    get_feature)
+    get_feature,
+    with_tag,
+    with_name)
 
 __all__ = [
     'stage',
@@ -23,6 +25,8 @@ __all__ = [
     'StageContext',
     'add_feature',
     'remove_feature',
-    'get_feature'
+    'get_feature',
+    'with_tag',
+    'with_name'
 ]
 __version__ = '0.3.0'

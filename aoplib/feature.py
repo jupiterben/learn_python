@@ -1,16 +1,19 @@
 """
 Feature基类和AOPClass
 """
+
 import enum
 from functools import wraps
 from typing import Callable, List
 from abc import ABC
 from fnmatch import fnmatch
-from aoplib.context import StageContext, StageInfo
+from aoplib.context import StageContext, IStageFilter, StageInfo
+
 
 class StageHookType(enum.Enum):
-    BEFORE = 'before'
-    AFTER = 'after'
+    BEFORE = "before"
+    AFTER = "after"
+
 
 def convert_to_list(value: str | List[str] | None) -> List[str]:
     """
@@ -22,112 +25,148 @@ def convert_to_list(value: str | List[str] | None) -> List[str]:
         return value
     return [value]
 
-# Stage特定的方法装饰器
 
-def before_stage(names: str | List[str] = None, tags: str | List[str] = None) -> Callable:
+# Stage特定的方法装饰器
+def before_stage(filter: IStageFilter = None) -> Callable:
     """
     装饰器：标记方法为特定stage的before钩子
 
     参数:
-        stage_name: str 或 List[str] - 单个stage名称或stage名称列表
-        支持通配符: * 匹配任意字符, ? 匹配单个字符
+        filter: IStageFilter - stage过滤器，可以是 WithTag(...) 或 WithName(...)
 
     使用方式:
         class MyFeature(Feature):
-            @before_stage("process")
-            def handle_process_before(self, context):
-                print("处理process的before逻辑")
+            # 无括号用法
+            @before_stage
+            def handle_all(self, context):
+                print("处理所有stage的before逻辑")
 
-            @before_stage(["login", "logout"])
+            # 指定标签
+            @before_stage(WithTag("security"))
+            def handle_security(self, context):
+                print("处理security标签的before逻辑")
+
+            # 指定名称
+            @before_stage(WithName("login", "logout"))
             def handle_auth_before(self, context):
                 print("处理认证相关的before逻辑")
-
-            @before_stage("process_*")
-            def handle_all_process(self, context):
-                print("处理所有process_开头的stage")
     """
+
     def decorator(func: Callable) -> Callable:
-        # 统一转换为列表
-        func._stage_names = convert_to_list(names)
-        func._stage_tags = convert_to_list(tags)
+        func._stage_filter = filter if not callable(filter) else None
         func._stage_hook_type = StageHookType.BEFORE
         return func
+
+    # 支持@before_stage和@before_stage(...)两种用法
+    if callable(filter):
+        # 无括号用法，filter实际上是被装饰的函数
+        func = filter
+        return decorator(func)
+
     return decorator
 
 
-def after_stage(names: str | List[str] = None, tags: str | List[str] = None) -> Callable:
+def after_stage(filter: IStageFilter = None) -> Callable:
     """
     装饰器：标记方法为特定stage的after钩子
 
     参数:
-        stage_name: str 或 List[str] - 单个stage名称或stage名称列表
-        支持通配符: * 匹配任意字符, ? 匹配单个字符
+        filter: IStageFilter - stage过滤器，可以是 WithTag(...) 或 WithName(...)
 
     使用方式:
         class MyFeature(Feature):
-            @after_stage("process")
-            def handle_process_after(self, context):
-                print("处理process的after逻辑")
+            # 无括号用法
+            @after_stage
+            def handle_all(self, context):
+                print("处理所有stage的after逻辑")
 
-            @after_stage(["create", "update", "delete"])
+            # 指定标签
+            @after_stage(WithTag("security"))
+            def handle_security(self, context):
+                print("处理security标签的after逻辑")
+
+            # 指定名称
+            @after_stage(WithName("create", "update"))
             def handle_crud_after(self, context):
                 print("处理CRUD操作的after逻辑")
-
-            @after_stage("*_data")
-            def handle_all_data(self, context):
-                print("处理所有_data结尾的stage")
     """
+
     def decorator(func: Callable) -> Callable:
-        # 统一转换为列表
-        func._stage_names = convert_to_list(names)
-        func._stage_tags = convert_to_list(tags)
+        func._stage_filter = filter if not callable(filter) else None
         func._stage_hook_type = StageHookType.AFTER
         return func
+
+    # 支持@after_stage和@after_stage(...)两种用法
+    if callable(filter):
+        # 无括号用法，filter实际上是被装饰的函数
+        func = filter
+        return decorator(func)
+
     return decorator
+
+
+class SFilter(IStageFilter):
+    def __init__(
+        self, name: str | List[str] = None, tag: str | List[str] = None
+    ) -> None:
+        self.names = []
+        self.patterns = []
+        for name in convert_to_list(name):
+            if "*" in name or "?" in name:
+                self.patterns.append(name)
+            else:
+                self.names.append(name)
+        self.tags = convert_to_list(tag)
+
+    def filter(self, stage_info: StageInfo):
+        if stage_info.name in self.names:
+            return True
+        if stage_info.simple_name in self.names:
+            return True
+        for pattern in self.patterns:
+            if fnmatch(stage_info.name, pattern):
+                return True
+            if fnmatch(stage_info.simple_name, pattern):
+                return True
+        if (
+            self.tags
+            and stage_info.tags
+            and any(tag in stage_info.tags for tag in self.tags)
+        ):
+            return True
+        return False
+
+
+def with_tag(*tags: str) -> IStageFilter:
+    return SFilter(tag=list(tags))
+
+
+def with_name(*names: str) -> IStageFilter:
+    return SFilter(name=list(names))
 
 
 class _StageHookHandlers:
     def __init__(self) -> None:
-        self.name_handlers = {}
-        self.pattern_handlers = []
-        self.tag_handlers = {}
+        self._handlers = []
 
-    def add_handler(self, stage_names: List[str],  stage_tags: List[str], callable: Callable):
-        for stage_name in stage_names:
-            if '*' in stage_name or '?' in stage_name:
-                self.pattern_handlers.append((stage_name, callable))
-                continue
-            self.name_handlers[stage_name] = callable
-        for stage_tag in stage_tags:
-            self.tag_handlers[stage_tag] = callable
+    def add_handler(self, filter: IStageFilter | None, callable: Callable):
+        self._handlers.append((filter, callable))
 
-    def get_handler(self, stage_info:StageInfo):
-        # 1. 先尝试精确匹配
-        handler = self.name_handlers.get(stage_info.name)
-        if handler:
-            return handler
-        handler = self.name_handlers.get(stage_info.simple_name)
-        if handler:
-            return handler
-        # 2. 通配符匹配
-        for pattern, handler in self.pattern_handlers:
-            if fnmatch(stage_info.name, pattern):
-                return handler
-            if fnmatch(stage_info.simple_name, pattern):
-                return handler
-        # # 3. 标签匹配
-        for tag in stage_info.tags:
-            handler = self.tag_handlers.get(tag)
-            if handler:
-                return handler
-        return None
+    def get_handlers(self, stage_info: StageInfo | None):
+        handlers = []
+        for filter, callable in self._handlers:
+            if filter and filter.filter(stage_info):
+                handlers.append(callable)
+            if not filter:
+                handlers.append(callable)
+        return handlers
 
 
 class Feature(ABC):
     """Feature抽象基类，定义拦截钩子接口"""
 
     def __init__(self, uniq_id: str = None):
-        self.uniq_id = uniq_id or self.__class__.__name__ 
+        self.uniq_id = uniq_id or self.__class__.__name__
         self.enabled = True
 
         self._hook_handlers = {}
@@ -136,31 +175,31 @@ class Feature(ABC):
     def _build_stage_handlers(self):
         """构建stage名称到处理方法的映射"""
         for name in dir(self):
-            if name.startswith('_'):
+            if name.startswith("_"):
                 continue
             attr = getattr(self, name)
-            if callable(attr) and hasattr(attr, '_stage_hook_type'):
+            if callable(attr) and hasattr(attr, "_stage_hook_type"):
                 hook_type = attr._stage_hook_type
+                filter = attr._stage_filter
                 hook_handler = self._hook_handlers.setdefault(
-                    hook_type, _StageHookHandlers())
-                hook_handler.add_handler(
-                    attr._stage_names, attr._stage_tags, attr)
+                    hook_type, _StageHookHandlers()
+                )
+                hook_handler.add_handler(filter, attr)
 
     def before_stage(self, context: StageContext):
         """在stage执行前调用"""
-        hook_handler:_StageHookHandlers = self._hook_handlers.get(StageHookType.BEFORE)
-        handler = hook_handler.get_handler(context.stage_info)
-        if handler:
-            handler(context)
-            return
-        
+        hook_handler: _StageHookHandlers = self._hook_handlers.get(StageHookType.BEFORE)
+        if hook_handler:
+            handlers = hook_handler.get_handlers(context.stage_info)
+            for handler in handlers:
+                handler(context)
 
     def after_stage(self, context: StageContext):
-        hook_handler:_StageHookHandlers = self._hook_handlers.get(StageHookType.AFTER)
-        handler = hook_handler.get_handler(context.stage_info)
-        if handler:
-            handler(context)
-            return
+        hook_handler: _StageHookHandlers = self._hook_handlers.get(StageHookType.AFTER)
+        if hook_handler:
+            handlers = hook_handler.get_handlers(context.stage_info)
+            for handler in handlers:
+                handler(context)
 
     def enable(self):
         """启用Feature"""
@@ -169,10 +208,6 @@ class Feature(ABC):
     def disable(self):
         """禁用Feature"""
         self.enabled = False
-
-    def filter(self, stage_name: str, stage_tags: List[str]):
-        """过滤Feature"""
-        return True
 
     def is_enabled(self, context: StageContext):
         """查询Feature是否启用"""
@@ -191,8 +226,8 @@ def add_feature(clsOrInstance, feature: Feature, replace=False):
     返回:
         bool: True表示添加成功，False表示已存在且未替换
     """
-    if not hasattr(clsOrInstance, '_features'):
-        setattr(clsOrInstance, '_features', [])
+    if not hasattr(clsOrInstance, "_features"):
+        setattr(clsOrInstance, "_features", [])
 
     features = clsOrInstance._features
 
@@ -223,7 +258,7 @@ def remove_feature(clsOrInstance, feature_or_id: Feature | str):
     返回:
         bool: True表示移除成功，False表示未找到
     """
-    if not hasattr(clsOrInstance, '_features'):
+    if not hasattr(clsOrInstance, "_features"):
         return clsOrInstance
 
     features = clsOrInstance._features
@@ -256,7 +291,7 @@ def get_feature(clsOrInstance, feature_id: str) -> Feature | None:
     返回:
         Feature对象或None
     """
-    if not hasattr(clsOrInstance, '_features'):
+    if not hasattr(clsOrInstance, "_features"):
         return None
 
     for feature in clsOrInstance._features:
@@ -288,6 +323,7 @@ def features(*feature_list):
         class MyApp:
             pass
     """
+
     def decorator(target_cls):
         # 保存原始__init__
         original_init = target_cls.__init__
@@ -312,16 +348,23 @@ def features(*feature_list):
         target_cls.__init__ = new_init
 
         # 添加Feature管理方法
-        target_cls.add_feature = lambda self, feature: add_feature(
-            self, feature)
-        target_cls.remove_feature = lambda self, feature: remove_feature(
-            self, feature)
+        target_cls.add_feature = lambda self, feature: add_feature(self, feature)
+        target_cls.remove_feature = lambda self, feature: remove_feature(self, feature)
         target_cls.get_features = lambda self: list(self._features)
         target_cls.has_feature = lambda self, feature: feature in self._features
         target_cls.clear_features = lambda self: self._features.clear()
-        target_cls.get_feature = lambda self, feature_id: get_feature(
-            self, feature_id)
+        target_cls.get_feature = lambda self, feature_id: get_feature(self, feature_id)
 
         return target_cls
+
+    # 支持@features和@features()两种用法
+    if (
+        feature_list
+        and isinstance(feature_list[0], type)
+        and not issubclass(feature_list[0], Feature)
+    ):
+        # @features 无括号用法，第一个参数是被装饰的类
+        target_cls = feature_list[0]
+        return decorator(target_cls)
 
     return decorator

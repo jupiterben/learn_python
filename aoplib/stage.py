@@ -1,6 +1,8 @@
 """
 Stage装饰器
 """
+
+from abc import ABC
 from functools import wraps
 from typing import List, Optional
 from aoplib.context import StageContext, StageInfo
@@ -23,23 +25,26 @@ def stage(*tags):
         def process(self, data):
             return data
     """
+
     def decorator(func):
         stage_name = func.__qualname__
-        stage_info = StageInfo(name=stage_name, tags=list(tags) or [
-        ], simple_name=stage_name.split('.')[-1])
-        
+        stage_info = StageInfo(
+            name=stage_name,
+            tags=list(tags) or [],
+            simple_name=stage_name.split(".")[-1],
+        )
+
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             all_features: List[Feature] = []
 
             # 收集实例级别的features
-            if hasattr(self, '_features'):
-                instance_features = getattr(self, '_features')
+            if hasattr(self, "_features"):
+                instance_features = getattr(self, "_features")
                 if isinstance(instance_features, list):
                     all_features.extend(instance_features)
 
-            features = [
-                f for f in all_features if f.enabled and f.filter(stage_name, tags)]
+            features = [f for f in all_features if f.enabled]
             if not features:
                 return func(self, *args, **kwargs)
 
@@ -49,7 +54,7 @@ def stage(*tags):
                 instance=self,
                 method=func,
                 args=args,
-                kwargs=kwargs
+                kwargs=kwargs,
             )
 
             # 调用before_stage钩子

@@ -14,7 +14,7 @@ class TimingFeature(Feature):
     def before_stage(self, context):
         # 在共享数据中存储开始时间
         context.data['start_time'] = time.time()
-        print(f"[TIMING] 开始计时: {context.stage_name}")
+        print(f"[TIMING] 开始计时: {context.stage_info.name}")
 
     def after_stage(self, context):
         # 从共享数据中读取开始时间
@@ -22,7 +22,7 @@ class TimingFeature(Feature):
         if start_time:
             elapsed = time.time() - start_time
             context.data['elapsed_time'] = elapsed  # 存储耗时供其他Feature使用
-            print(f"[TIMING] {context.stage_name} 耗时: {elapsed:.4f}秒")
+            print(f"[TIMING] {context.stage_info.name} 耗时: {elapsed:.4f}秒")
 
 
 class LoggingFeature(Feature):
@@ -32,15 +32,15 @@ class LoggingFeature(Feature):
         super().__init__()
 
     def before_stage(self, context):
-        print(f"[LOG] 调用: {context.stage_name}")
+        print(f"[LOG] 调用: {context.stage_info.name}")
 
     def after_stage(self, context):
         # 读取TimingFeature存储的耗时数据
         elapsed = context.data.get('elapsed_time')
         if elapsed:
-            print(f"[LOG] 完成: {context.stage_name}，耗时 {elapsed:.4f}秒")
+            print(f"[LOG] 完成: {context.stage_info.name}，耗时 {elapsed:.4f}秒")
         else:
-            print(f"[LOG] 完成: {context.stage_name}")
+            print(f"[LOG] 完成: {context.stage_info.name}")
 
 
 class CacheFeature(Feature):
@@ -52,7 +52,7 @@ class CacheFeature(Feature):
 
     def before_stage(self, context):
         # 检查缓存
-        cache_key = f"{context.stage_name}:{context.args}"
+        cache_key = f"{context.stage_info.name}:{context.args}"
         if cache_key in self.cache:
             context.data['cache_hit'] = True
             context.data['cached_result'] = self.cache[cache_key]
@@ -64,7 +64,7 @@ class CacheFeature(Feature):
     def after_stage(self, context):
         # 如果未命中缓存，存储结果
         if not context.data.get('cache_hit'):
-            cache_key = f"{context.stage_name}:{context.args}"
+            cache_key = f"{context.stage_info.name}:{context.args}"
             self.cache[cache_key] = context.result
             print(f"[CACHE] 缓存结果: {cache_key}")
 
@@ -79,7 +79,7 @@ class MetricsFeature(Feature):
     def after_stage(self, context):
         # 收集所有共享数据
         metric = {
-            'stage_name': context.stage_name,
+            'stage_name': context.stage_info.name,
             'elapsed_time': context.data.get('elapsed_time'),
             'cache_hit': context.data.get('cache_hit'),
             'result': context.result

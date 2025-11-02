@@ -1,8 +1,9 @@
 """
 快速对比：单个 stage vs 多个 stage 装饰器
 """
+
 from aoplib import stage, Feature, before_stage, after_stage
-from aoplib.feature import features
+from aoplib.feature import with_tag, features
 
 
 # ✅ 推荐：一个方法处理多个stage（简洁清晰）
@@ -10,44 +11,56 @@ class SecurityFeature(Feature):
     def __init__(self):
         super().__init__()
 
-    @before_stage(tags=["security"])
+    @before_stage(with_tag("security"))
     def handle_auth(self, context):
-        print(f"[安全] 认证操作: {context.stage_info}")
+        print(f"[安全] 认证操作: {context.stage_info.name}")
 
-    @after_stage(tags=["security"])
+    @after_stage(with_tag("security"))
     def audit_auth(self, context):
-        print(f"[安全] 认证审计: {context.stage_info}")
+        print(f"[安全] 认证审计: {context.stage_info.name}")
 
-    @before_stage("test")
-    def handle_log(self, context):
-        print(f"[安全] 测试操作: {context.stage_info}")
+    @after_stage 
+    def do_log(self, context):
+        print(f"do log:  {context.stage_info.name}")
 
 
-@features(SecurityFeature())
+@features(SecurityFeature)
 class Service:
     @stage("security")
     def login(self):
-        return "登录"
+        return "登录阶段"
 
     @stage("security")
     def logout(self):
-        return "登出"
+        return "登出阶段"
 
     @stage("security")
     def register(self):
-        return "注册"
+        return "注册阶段"
 
     @stage
     def test(self):
-        return "测试"
+        return "测试阶段"
+
+
+@features
+class Service2:
+    @stage("security")
+    def login(self):
+        return "登录"
 
 
 if __name__ == "__main__":
 
     print("\n--- 新方式：1个方法（3行代码） ---")
-    service2 = Service()
+    service1 = Service()
 
-    service2.test()
+    service1.test()
+    service1.login()
+    service1.logout()
+    service1.register()
+
+    print("\n--- 新方式：1个方法（3行代码） ---")
+    service2 = Service2()
+    service2.add_feature(SecurityFeature())
     service2.login()
-    service2.logout()
-    service2.register()
