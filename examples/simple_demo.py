@@ -12,15 +12,15 @@ class SecurityFeature(Feature):
 
     @before_stage(tags=["security"])
     def handle_auth(self, context):
-        print(f"[安全] 认证操作: {context.stage_name}")
+        print(f"[安全] 认证操作: {context.stage_info}")
 
     @after_stage(tags=["security"])
     def audit_auth(self, context):
-        print(f"[安全] 认证审计: {context.stage_name}")
+        print(f"[安全] 认证审计: {context.stage_info}")
 
     @before_stage("test")
     def handle_log(self, context):
-        print(f"[安全] 测试操作: {context.stage_name}")
+        print(f"[安全] 测试操作: {context.stage_info}")
 
 
 @features(SecurityFeature())

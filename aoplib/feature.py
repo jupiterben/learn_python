@@ -8,7 +8,7 @@ from abc import ABC
 from fnmatch import fnmatch
 from aoplib.context import StageContext, StageInfo
 
-class StageHookType(enum):
+class StageHookType(enum.Enum):
     BEFORE = 'before'
     AFTER = 'after'
 
@@ -23,7 +23,6 @@ def convert_to_list(value: str | List[str] | None) -> List[str]:
     return [value]
 
 # Stage特定的方法装饰器
-
 
 def before_stage(names: str | List[str] = None, tags: str | List[str] = None) -> Callable:
     """
@@ -93,23 +92,34 @@ class _StageHookHandlers:
         self.pattern_handlers = []
         self.tag_handlers = {}
 
-    def add_handler(self, stage_name: str,  stage_tags: List[str], call):
-        pass
+    def add_handler(self, stage_names: List[str],  stage_tags: List[str], callable: Callable):
+        for stage_name in stage_names:
+            if '*' in stage_name or '?' in stage_name:
+                self.pattern_handlers.append((stage_name, callable))
+                continue
+            self.name_handlers[stage_name] = callable
+        for stage_tag in stage_tags:
+            self.tag_handlers[stage_tag] = callable
 
     def get_handler(self, stage_info:StageInfo):
         # 1. 先尝试精确匹配
-        # handler = self.name_handlers.get(stage_name)
-        # if handler:
-        #     return handler
-        # handler = self.name_handlers.get(simple_name)
-        # if handler:
-        #     return handler
-        # # 2. 通配符匹配
-        # for pattern, handler in self.pattern_handlers:
-        #     if fnmatch(stage_name, pattern):
-        #         return handler
+        handler = self.name_handlers.get(stage_info.name)
+        if handler:
+            return handler
+        handler = self.name_handlers.get(stage_info.simple_name)
+        if handler:
+            return handler
+        # 2. 通配符匹配
+        for pattern, handler in self.pattern_handlers:
+            if fnmatch(stage_info.name, pattern):
+                return handler
+            if fnmatch(stage_info.simple_name, pattern):
+                return handler
         # # 3. 标签匹配
-        # handler = self.tag_handlers.get('*')
+        for tag in stage_info.tags:
+            handler = self.tag_handlers.get(tag)
+            if handler:
+                return handler
         return None
 
 
@@ -117,7 +127,7 @@ class Feature(ABC):
     """Feature抽象基类，定义拦截钩子接口"""
 
     def __init__(self, uniq_id: str = None):
-        self.uniq_id = uniq_id or self.__class__.__name__
+        self.uniq_id = uniq_id or self.__class__.__name__ 
         self.enabled = True
 
         self._hook_handlers = {}
@@ -131,61 +141,26 @@ class Feature(ABC):
             attr = getattr(self, name)
             if callable(attr) and hasattr(attr, '_stage_hook_type'):
                 hook_type = attr._stage_hook_type
-                hook_handlers = self._hook_handlers.setdefault(
+                hook_handler = self._hook_handlers.setdefault(
                     hook_type, _StageHookHandlers())
-                hook_handlers.add_handler(
+                hook_handler.add_handler(
                     attr._stage_names, attr._stage_tags, attr)
 
     def before_stage(self, context: StageContext):
         """在stage执行前调用"""
-        # 1. 先尝试精确匹配
-        handler = self._before_handlers.get(context.stage_name)
+        hook_handler:_StageHookHandlers = self._hook_handlers.get(StageHookType.BEFORE)
+        handler = hook_handler.get_handler(context.stage_info)
         if handler:
             handler(context)
             return
-
-        handler = self._before_handlers.get(context.stage_simple_name)
-        if handler:
-            handler(context)
-            return
-
-        # 2. 再尝试通配符匹配
-        for pattern, handler in self._before_patterns:
-            if fnmatch(context.stage_name, pattern):
-                handler(context)
-                return
-
-        # 3. 再尝试tag匹配
-        for tag, handlers in self._before_tag_handlers.items():
-            if tag in context.stage_tags:
-                for handler in handlers:
-                    handler(context)
+        
 
     def after_stage(self, context: StageContext):
-        simple_name = context.stage_name.split('.')[-1]
-        """在stage执行后调用"""
-        # 1. 先尝试精确匹配
-        handler = self._after_handlers.get(context.stage_name)
+        hook_handler:_StageHookHandlers = self._hook_handlers.get(StageHookType.AFTER)
+        handler = hook_handler.get_handler(context.stage_info)
         if handler:
             handler(context)
             return
-
-        handler = self._after_handlers.get(simple_name)
-        if handler:
-            handler(context)
-            return
-
-        # 2. 再尝试通配符匹配
-        for pattern, handler in self._after_patterns:
-            if fnmatch(context.stage_name, pattern):
-                handler(context)
-                return
-
-        # 3. 再尝试tag匹配
-        for tag, handlers in self._after_tag_handlers.items():
-            if tag in context.stage_tags:
-                for handler in handlers:
-                    handler(context)
 
     def enable(self):
         """启用Feature"""

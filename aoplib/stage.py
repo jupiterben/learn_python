@@ -25,7 +25,9 @@ def stage(*tags):
     """
     def decorator(func):
         stage_name = func.__qualname__
-
+        stage_info = StageInfo(name=stage_name, tags=list(tags) or [
+        ], simple_name=stage_name.split('.')[-1])
+        
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             all_features: List[Feature] = []
@@ -41,8 +43,6 @@ def stage(*tags):
             if not features:
                 return func(self, *args, **kwargs)
 
-            stage_info = StageInfo(name=stage_name, tags=tags or [
-            ], simple_name=stage_name.split('.')[-1])
             # 构造上下文
             context = StageContext(
                 stage_info=stage_info,
@@ -71,9 +71,9 @@ def stage(*tags):
         return wrapper
 
     # 支持@stage和@stage()两种用法
-    if callable(name):
-        func = name
-        name = None
+    if tags and callable(tags[0]):
+        func = tags[0]
+        tags = tags[1:]
         return decorator(func)
 
     return decorator
