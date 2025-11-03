@@ -14,6 +14,7 @@ class SecurityFeature(Feature):
     @before_stage(with_tag("security"))
     def handle_auth(self, context):
         print(f"[安全] 认证操作: {context.stage_info.name}")
+        raise Exception("认证失败")
 
     @after_stage(with_tag("security"))
     def audit_auth(self, context):

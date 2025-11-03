@@ -59,19 +59,27 @@ def stage(*tags):
 
             # 调用before_stage钩子
             for feature in features:
-                if feature.is_enabled(context):
-                    feature.before_stage(context)
+                feature.before_stage(context)
 
             # 执行原方法
-            result = func(self, *args, **kwargs)
-            context.result = result
+            try:
+                context.result = func(self, *args, **kwargs)
+            except Exception as e:
+                context.exception = e
+                for feature in features:
+                    feature.exception_stage(context)
+                raise e
+            finally:
+                for feature in features:
+                    feature.finally_stage(context)
 
             # 调用after_stage钩子
             for feature in reversed(features):
-                if feature.is_enabled(context):
-                    feature.after_stage(context)
+                feature.after_stage(context)
 
-            return result
+            for feature in features:
+                feature.return_stage(context)
+            return context.result
 
         return wrapper
 

@@ -13,6 +13,9 @@ from aoplib.context import StageContext, IStageFilter, StageInfo
 class StageHookType(enum.Enum):
     BEFORE = "before"
     AFTER = "after"
+    EXCEPTION = "exception"
+    FINALLY = "finally"
+    RETURN = "return"
 
 
 def convert_to_list(value: str | List[str] | None) -> List[str]:
@@ -27,31 +30,33 @@ def convert_to_list(value: str | List[str] | None) -> List[str]:
 
 
 # Stage特定的方法装饰器
+
+"""
+装饰器：标记方法为特定stage的before钩子
+
+参数:
+    filter: IStageFilter - stage过滤器，可以是 WithTag(...) 或 WithName(...)
+
+使用方式:
+    class MyFeature(Feature):
+        # 无括号用法
+        @before_stage
+        def handle_all(self, context):
+            print("处理所有stage的before逻辑")
+
+        # 指定标签
+        @before_stage(WithTag("security"))
+        def handle_security(self, context):
+            print("处理security标签的before逻辑")
+
+        # 指定名称
+        @before_stage(WithName("login", "logout"))
+        def handle_auth_before(self, context):
+            print("处理认证相关的before逻辑")
+"""
+
+
 def before_stage(filter: IStageFilter = None) -> Callable:
-    """
-    装饰器：标记方法为特定stage的before钩子
-
-    参数:
-        filter: IStageFilter - stage过滤器，可以是 WithTag(...) 或 WithName(...)
-
-    使用方式:
-        class MyFeature(Feature):
-            # 无括号用法
-            @before_stage
-            def handle_all(self, context):
-                print("处理所有stage的before逻辑")
-
-            # 指定标签
-            @before_stage(WithTag("security"))
-            def handle_security(self, context):
-                print("处理security标签的before逻辑")
-
-            # 指定名称
-            @before_stage(WithName("login", "logout"))
-            def handle_auth_before(self, context):
-                print("处理认证相关的before逻辑")
-    """
-
     def decorator(func: Callable) -> Callable:
         func._stage_filter = filter if not callable(filter) else None
         func._stage_hook_type = StageHookType.BEFORE
@@ -67,30 +72,6 @@ def before_stage(filter: IStageFilter = None) -> Callable:
 
 
 def after_stage(filter: IStageFilter = None) -> Callable:
-    """
-    装饰器：标记方法为特定stage的after钩子
-
-    参数:
-        filter: IStageFilter - stage过滤器，可以是 WithTag(...) 或 WithName(...)
-
-    使用方式:
-        class MyFeature(Feature):
-            # 无括号用法
-            @after_stage
-            def handle_all(self, context):
-                print("处理所有stage的after逻辑")
-
-            # 指定标签
-            @after_stage(WithTag("security"))
-            def handle_security(self, context):
-                print("处理security标签的after逻辑")
-
-            # 指定名称
-            @after_stage(WithName("create", "update"))
-            def handle_crud_after(self, context):
-                print("处理CRUD操作的after逻辑")
-    """
-
     def decorator(func: Callable) -> Callable:
         func._stage_filter = filter if not callable(filter) else None
         func._stage_hook_type = StageHookType.AFTER
@@ -105,6 +86,50 @@ def after_stage(filter: IStageFilter = None) -> Callable:
     return decorator
 
 
+def exception_stage(filter: IStageFilter = None) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        func._stage_filter = filter if not callable(filter) else None
+        func._stage_hook_type = StageHookType.EXCEPTION
+        return func
+
+    # 支持@exception_stage和@exception_stage(...)两种用法
+    if callable(filter):
+        # 无括号用法，filter实际上是被装饰的函数
+        func = filter
+        return decorator(func)
+    return decorator
+
+
+def finally_stage(filter: IStageFilter = None) -> Callable:
+
+    def decorator(func: Callable) -> Callable:
+        func._stage_filter = filter if not callable(filter) else None
+        func._stage_hook_type = StageHookType.FINALLY
+        return func
+
+    # 支持@finally_stage和@finally_stage(...)两种用法
+    if callable(filter):
+        # 无括号用法，filter实际上是被装饰的函数
+        func = filter
+        return decorator(func)
+    return decorator
+
+
+def return_stage(filter: IStageFilter = None) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        func._stage_filter = filter if not callable(filter) else None
+        func._stage_hook_type = StageHookType.RETURN
+        return func
+
+    # 支持@return_stage和@return_stage(...)两种用法
+    if callable(filter):
+        # 无括号用法，filter实际上是被装饰的函数
+        func = filter
+        return decorator(func)
+    return decorator
+
+
+# Stage过滤器
 class SFilter(IStageFilter):
     def __init__(
         self, name: str | List[str] = None, tag: str | List[str] = None
@@ -201,6 +226,31 @@ class Feature(ABC):
             for handler in handlers:
                 handler(context)
 
+    def exception_stage(self, context: StageContext):
+        hook_handler: _StageHookHandlers = self._hook_handlers.get(
+            StageHookType.EXCEPTION
+        )
+        if hook_handler:
+            handlers = hook_handler.get_handlers(context.stage_info)
+            for handler in handlers:
+                handler(context)
+
+    def finally_stage(self, context: StageContext):
+        hook_handler: _StageHookHandlers = self._hook_handlers.get(
+            StageHookType.FINALLY
+        )
+        if hook_handler:
+            handlers = hook_handler.get_handlers(context.stage_info)
+            for handler in handlers:
+                handler(context)
+
+    def return_stage(self, context: StageContext):
+        hook_handler: _StageHookHandlers = self._hook_handlers.get(StageHookType.RETURN)
+        if hook_handler:
+            handlers = hook_handler.get_handlers(context.stage_info)
+            for handler in handlers:
+                handler(context)
+
     def enable(self):
         """启用Feature"""
         self.enabled = True
@@ -208,10 +258,6 @@ class Feature(ABC):
     def disable(self):
         """禁用Feature"""
         self.enabled = False
-
-    def is_enabled(self, context: StageContext):
-        """查询Feature是否启用"""
-        return True
 
 
 def add_feature(clsOrInstance, feature: Feature, replace=False):
