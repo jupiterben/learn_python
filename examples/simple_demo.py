@@ -1,67 +1,89 @@
 """
-快速对比：单个 stage vs 多个 stage 装饰器
+快速对比：单个 joinpoint vs 多个 joinpoint 装饰器
 """
 
-from aoplib import stage, Feature, before_stage, after_stage
-from aoplib.feature import with_tag, features
+from aoplib import Aspect, JoinMethodContext, method_before, method_after, join_method, join_property, weave
+from aoplib import prop_after_set, prop_init
+from aoplib.context import JoinPropContext
+from aoplib.joincut import with_name
 
 
-# ✅ 推荐：一个方法处理多个stage（简洁清晰）
-class SecurityFeature(Feature):
+class LogAspect(Aspect):
     def __init__(self):
         super().__init__()
 
-    @before_stage(with_tag("security"))
-    def handle_auth(self, context):
-        print(f"[安全] 认证操作: {context.stage_info.name}")
-        raise Exception("认证失败")
+    @method_before
+    def before(self, context):
+        print(f"log before: {context.name}")
 
-    @after_stage(with_tag("security"))
-    def audit_auth(self, context):
-        print(f"[安全] 认证审计: {context.stage_info.name}")
+    @method_after
+    def after(self, context):
+        print(f"log after: {context.name}")
 
-    @after_stage 
-    def do_log(self, context):
-        print(f"do log:  {context.stage_info.name}")
+# ✅ 推荐：一个方法处理多个point（简洁清晰）
 
 
-@features(SecurityFeature)
+class SecurityFeature(Aspect):
+    def __init__(self):
+        super().__init__()
+
+    @method_before(with_name("login", "register", "logout"))
+    def handle_auth(self, context: JoinMethodContext):
+        print(f"[安全] 认证操作: {context.name}")
+
+
+class LocalStoreProps(Aspect):
+    def __init__(self):
+        super().__init__()
+
+    @prop_init
+    def load_storage(self, context: JoinPropContext):
+        print(f"load storage")
+        return context.value
+
+    @prop_after_set
+    def store_name(self, context):
+        print(f"[存储] 存储属性: {context.value}")
+
+
+@weave(SecurityFeature)
 class Service:
-    @stage("security")
+    def __init__(self):
+        super().__init__()
+
+    @join_property
+    def name(self):
+        pass
+
+    @join_method
     def login(self):
+        self.name = "张三"
+        print(self.name)
         return "登录阶段"
 
-    @stage("security")
+    @join_method
     def logout(self):
         return "登出阶段"
 
-    @stage("security")
+    @join_method
     def register(self):
         return "注册阶段"
 
-    @stage
+    @join_method
     def test(self):
         return "测试阶段"
 
 
-@features
 class Service2:
-    @stage("security")
+    @join_method
     def login(self):
-        return "登录"
+        return "登录中..."
 
 
 if __name__ == "__main__":
 
-    print("\n--- 新方式：1个方法（3行代码） ---")
     service1 = Service()
-
     service1.test()
     service1.login()
     service1.logout()
     service1.register()
-
-    print("\n--- 新方式：1个方法（3行代码） ---")
-    service2 = Service2()
-    service2.add_feature(SecurityFeature())
-    service2.login()
