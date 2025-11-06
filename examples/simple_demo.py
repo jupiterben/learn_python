@@ -2,8 +2,8 @@
 快速对比：单个 joinpoint vs 多个 joinpoint 装饰器
 """
 
-from aoplib import Aspect, JoinMethodContext, method_before, method_after, join_method, join_property, weave
-from aoplib import prop_after_set, prop_init
+from aoplib import Aspect, JoinMethodContext, before_method, after_method, join_method, join_property, aop_class
+from aoplib import after_property_set, around_property_init
 from aoplib.context import JoinPropContext
 from aoplib.joincut import with_name
 
@@ -12,11 +12,11 @@ class LogAspect(Aspect):
     def __init__(self):
         super().__init__()
 
-    @method_before
+    @before_method
     def before(self, context):
         print(f"log before: {context.name}")
 
-    @method_after
+    @after_method
     def after(self, context):
         print(f"log after: {context.name}")
 
@@ -27,7 +27,7 @@ class SecurityFeature(Aspect):
     def __init__(self):
         super().__init__()
 
-    @method_before(with_name("login", "register", "logout"))
+    @before_method(with_name("login", "register", "logout"))
     def handle_auth(self, context: JoinMethodContext):
         print(f"[安全] 认证操作: {context.name}")
 
@@ -36,17 +36,17 @@ class LocalStoreProps(Aspect):
     def __init__(self):
         super().__init__()
 
-    @prop_init
+    @around_property_init
     def load_storage(self, context: JoinPropContext):
         print(f"load storage")
         return context.value
 
-    @prop_after_set
+    @after_property_set
     def store_name(self, context):
         print(f"[存储] 存储属性: {context.value}")
 
 
-@weave(SecurityFeature)
+@aop_class(SecurityFeature)
 class Service:
     def __init__(self):
         super().__init__()

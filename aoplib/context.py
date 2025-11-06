@@ -45,3 +45,17 @@ class JoinMethodContext(JoinContext):
 class JoinPropContext(JoinContext):
     """Stage执行上下文，传递给Feature钩子"""
     value: Any = None
+    skip_set: bool = False  # 是否跳过属性设置
+    skip_delete: bool = False  # 是否跳过属性删除
+
+    @property
+    def name(self):
+        return self.method.__qualname__
+
+    def skip_setter(self):
+        """标记跳过属性设置（用于before_property_set验证失败时）"""
+        self.skip_set = True
+
+    def skip_deleter(self):
+        """标记跳过属性删除（用于before_property_delete验证失败时）"""
+        self.skip_delete = True

@@ -4,24 +4,25 @@ Aspect基类和AOPClass
 
 import enum
 from functools import wraps
-from typing import Callable, List
+from typing import Callable, Dict, List
 from abc import ABC
 from .joincut import IJoinPointFilter
 from .context import JoinContext
 
 
 class AdviceType(enum.Enum):
-    METHOD_BEFORE = "method_before"
-    METHOD_AFTER = "method_after"
-    METHOD_EXCEPTION = "method_exception"
-    METHOD_RETURN = "method_return"
+    Before = "before_method"
+    After = "after_method"
+    AfterReturning = "after_method_returning"
+    AfterThrowing = "after_method_throwing"
+    Around = "around_method"
 
-    PROP_BEFORE_SET = "prop_before_set"
-    PROP_AFTER_SET = "prop_after_set"
-    PROP_GET = "prop_get"
-    PROP_INIT = "prop_init"
-    PROP_BEFORE_DELETE = "prop_before_delete"
-    PROP_AFTER_DELETE = "prop_after_delete"
+    BeforeSet = "before_property_set"
+    AfterSet = "after_property_set"
+    AfterGet = "after_property_get"
+    BeforeInit = "before_property_init"
+    BeforeDelete = "before_property_delete"
+    AfterDelete = "after_property_delete"
 
 
 def _make_advice_decorator(advice_type: AdviceType) -> Callable:
@@ -42,15 +43,20 @@ def _make_advice_decorator(advice_type: AdviceType) -> Callable:
 
 
 # 使用工厂函数生成所有装饰器
-method_before = _make_advice_decorator(AdviceType.METHOD_BEFORE)
-method_after = _make_advice_decorator(AdviceType.METHOD_AFTER)
-method_exception = _make_advice_decorator(AdviceType.METHOD_EXCEPTION)
-method_return = _make_advice_decorator(AdviceType.METHOD_RETURN)
-prop_before_set = _make_advice_decorator(AdviceType.PROP_BEFORE_SET)
-prop_after_set = _make_advice_decorator(AdviceType.PROP_AFTER_SET)
-prop_get = _make_advice_decorator(AdviceType.PROP_GET)
-prop_init = _make_advice_decorator(AdviceType.PROP_INIT)
-prop_before_delete = _make_advice_decorator(AdviceType.PROP_BEFORE_DELETE)
+# 方法通知
+before = _make_advice_decorator(AdviceType.Before)
+after = _make_advice_decorator(AdviceType.After)
+after_returning = _make_advice_decorator(AdviceType.AfterReturning)
+after_throwing = _make_advice_decorator(AdviceType.AfterThrowing)
+around = _make_advice_decorator(AdviceType.Around)
+
+# 属性通知
+before_set = _make_advice_decorator(AdviceType.BeforeSet)
+after_set = _make_advice_decorator(AdviceType.AfterSet)
+after_get = _make_advice_decorator(AdviceType.AfterGet)
+before_init = _make_advice_decorator(AdviceType.BeforeInit)
+before_delete = _make_advice_decorator(AdviceType.BeforeDelete)
+after_delete = _make_advice_decorator(AdviceType.AfterDelete)
 
 
 class _PointHookHandlers:
@@ -79,7 +85,7 @@ class Aspect(ABC):
         self.uniq_id = uniq_id or self.__class__.__name__
         self.enabled = True
 
-        self._hook_handlers = {}
+        self._hook_handlers:Dict[] = {}
         self._build_point_handlers()
 
     def _build_point_handlers(self):
@@ -106,11 +112,11 @@ class Aspect(ABC):
         hook_handler = self._hook_handlers.get(adType)
         return hook_handler.get_handlers(context) if hook_handler else []
 
-    def handle_point(self, adType: AdviceType, context: JoinContext):
-        handlers = self.get_handlers(adType, context)
-        if handlers:
-            for h in handlers:
-                h(context)
+    # def handle_point(self, adType: AdviceType, context: JoinContext):
+    #     handlers = self.get_handlers(adType, context)
+    #     if handlers:
+    #         for h in handlers:
+    #             h(context)
 
     def enable(self):
         """启用Aspect"""

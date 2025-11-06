@@ -3,13 +3,13 @@ import fnmatch
 from typing import Callable
 
 
-class IJoinPointFilter(ABC):
+class IJoinFilter(ABC):
     @abstractmethod
     def filter(self, method, meta: dict):
         pass
 
 
-class NameFilter(IJoinPointFilter):
+class NameFilter(IJoinFilter):
     def __init__(
         self, *names
     ) -> None:
@@ -36,5 +36,5 @@ class NameFilter(IJoinPointFilter):
         return False
 
 
-def with_name(*names: str) -> IJoinPointFilter:
+def with_name(*names: str) -> IJoinFilter:
     return NameFilter(*names)
