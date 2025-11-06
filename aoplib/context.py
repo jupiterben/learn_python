@@ -17,9 +17,10 @@ class JoinContext:
 @dataclass
 class JoinMethodContext(JoinContext):
     """Stage执行上下文，传递给Feature钩子"""
+
     args: tuple  # 位置参数(不含self)
     kwargs: dict  # 关键字参数
-    result: Any = None  # 方法返回值()
+    return_value: Any = None  # 方法返回值()
     exception: Optional[Exception] = None  # 异常对象(如有)
     suppressed: bool = False  # 异常是否被抑制（不再传播）
 
@@ -44,6 +45,7 @@ class JoinMethodContext(JoinContext):
 @dataclass
 class JoinPropContext(JoinContext):
     """Stage执行上下文，传递给Feature钩子"""
+
     value: Any = None
     skip_set: bool = False  # 是否跳过属性设置
     skip_delete: bool = False  # 是否跳过属性删除

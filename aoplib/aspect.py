@@ -6,7 +6,7 @@ import enum
 from functools import wraps
 from typing import Callable, Dict, List
 from abc import ABC
-from .joincut import IJoinPointFilter
+from .pointcut import IJoinFilter
 from .context import JoinContext
 
 
@@ -27,7 +27,8 @@ class AdviceType(enum.Enum):
 
 def _make_advice_decorator(advice_type: AdviceType) -> Callable:
     """工厂函数：生成advice装饰器，消除重复代码"""
-    def decorator(filter: IJoinPointFilter = None) -> Callable:
+
+    def decorator(filter: IJoinFilter = None) -> Callable:
         def inner_decorator(func: Callable) -> Callable:
             func._pointcut = filter if not callable(filter) else None
             func._advice_type = advice_type
@@ -39,6 +40,7 @@ def _make_advice_decorator(advice_type: AdviceType) -> Callable:
             return inner_decorator(filter)
 
         return inner_decorator
+
     return decorator
 
 
@@ -63,19 +65,16 @@ class _PointHookHandlers:
     def __init__(self) -> None:
         self._handlers = []
 
-    def add_handler(self, filter: IJoinPointFilter | None, handler: Callable):
+    def add_handler(self, filter: IJoinFilter | None, handler: Callable):
         self._handlers.append((filter, handler))
 
-    def get_handlers(self, context: JoinContext) -> List[Callable]:
-        handlers = []
+    def get_handlers(self, context: JoinContext):
         for filter_obj, handler in self._handlers:
-            # 修复逻辑错误：应该用elif避免重复添加
             if filter_obj is not None:
                 if filter_obj.filter(context.method, context.meta):
-                    handlers.append(handler)
+                    yield handler
             else:
-                handlers.append(handler)
-        return handlers
+                yield handler
 
 
 class Aspect(ABC):
@@ -85,7 +84,7 @@ class Aspect(ABC):
         self.uniq_id = uniq_id or self.__class__.__name__
         self.enabled = True
 
-        self._hook_handlers:Dict[] = {}
+        self._hook_handlers: Dict[AdviceType, _PointHookHandlers] = {}
         self._build_point_handlers()
 
     def _build_point_handlers(self):
@@ -99,7 +98,11 @@ class Aspect(ABC):
                     continue
                 # 绑定方法到实例
                 bound_attr = getattr(self, name, None)
-                if bound_attr and callable(bound_attr) and hasattr(bound_attr, "_advice_type"):
+                if (
+                    bound_attr
+                    and callable(bound_attr)
+                    and hasattr(bound_attr, "_advice_type")
+                ):
                     hook_type = bound_attr._advice_type
                     filter_obj = bound_attr._pointcut
                     hook_handler = self._hook_handlers.setdefault(
@@ -108,15 +111,10 @@ class Aspect(ABC):
                     hook_handler.add_handler(filter_obj, bound_attr)
                     processed.add(name)
 
-    def get_handlers(self, adType: AdviceType, context: JoinContext) -> List[Callable]:
+    def get_handlers(self, adType: AdviceType, context: JoinContext):
         hook_handler = self._hook_handlers.get(adType)
-        return hook_handler.get_handlers(context) if hook_handler else []
-
-    # def handle_point(self, adType: AdviceType, context: JoinContext):
-    #     handlers = self.get_handlers(adType, context)
-    #     if handlers:
-    #         for h in handlers:
-    #             h(context)
+        if hook_handler:
+            yield from hook_handler.get_handlers(context)
 
     def enable(self):
         """启用Aspect"""
@@ -260,22 +258,16 @@ def aop_class(*aspects):
 
         # 添加Aspect管理方法
         target_cls.add_aspect = lambda self, aspect: add_aspect(self, aspect)
-        target_cls.remove_aspect = lambda self, aspect: remove_aspect(
-            self, aspect)
+        target_cls.remove_aspect = lambda self, aspect: remove_aspect(self, aspect)
         target_cls.get_aspects = lambda self: list(self._aspects)
         target_cls.has_aspect = lambda self, aspect: aspect in self._aspects
         target_cls.clear_aspects = lambda self: self._aspects.clear()
-        target_cls.get_aspect = lambda self, aspect_id: get_aspect(
-            self, aspect_id)
+        target_cls.get_aspect = lambda self, aspect_id: get_aspect(self, aspect_id)
 
         return target_cls
 
     # 支持@aspects和@aspects()两种用法
-    if (
-        aspects
-        and isinstance(aspects[0], type)
-        and not issubclass(aspects[0], Aspect)
-    ):
+    if aspects and isinstance(aspects[0], type) and not issubclass(aspects[0], Aspect):
         # @aspects 无括号用法，第一个参数是被装饰的类
         target_cls = aspects[0]
         return decorator(target_cls)

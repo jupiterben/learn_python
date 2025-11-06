@@ -2,24 +2,48 @@
 Joinpoint装饰器
 """
 
+from abc import ABC, abstractmethod
 from functools import wraps
 from typing import Any, Callable, List
 from .context import JoinMethodContext, JoinPropContext
 from .aspect import AdviceType, Aspect, get_enable_aspects
 
 
-class ProceedingJoinPoint:
+class ProceedingJoinPoint(ABC):
     def __init__(self, context: JoinMethodContext):
         self.context = context
-        self.wrap_proceeding = None
 
+    @abstractmethod
     def proceed(self, *args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
-        if self.wrap_proceeding:
-            return self.wrap_proceeding(self.context.instance, *args, **kwargs)
-        else:
-            return self.context.method(self.context.instance, *args, **kwargs)
+        pass
+
+
+class ProceedingHandler(ProceedingJoinPoint):
+    def __init__(
+        self, handler: Callable, pjp: ProceedingJoinPoint, context: JoinMethodContext
+    ):
+        super().__init__(context)
+        self.pjp = pjp
+        self.handler = handler
+
+    def proceed(self):
+        return self.handler(self.pjp)
+
+
+class ProceedingMethod(ProceedingJoinPoint):
+    def __init__(self, context: JoinMethodContext):
+        super().__init__(context)
+        self.context = context
+
+    def proceed(self):
+        return self.context.method(
+            self.context.instance, *self.context.args, **self.context.kwargs
+        )
+
+
+def _handler_iter(aspects: List[Aspect], type: AdviceType, context: JoinMethodContext):
+    for aspect in aspects:
+        yield from aspect.get_handlers(type, context)
 
 
 def join_method(f=None, **meta):
@@ -41,33 +65,26 @@ def join_method(f=None, **meta):
             )
 
             # 调用 Before 钩子
-            for aspect in aspects:
-                handlers = aspect.get_handlers(AdviceType.Before, context)
-                for h in handlers:
-                    h(context)
+            for handler in _handler_iter(aspects, AdviceType.Before, context):
+                handler(context)
 
             # 执行原方法
             has_exception = False
             try:
                 # 调用 Around 钩子
-                for aspect in aspects:
-                    handlers = aspect.get_handlers(AdviceType.Around, context)
-                    for h in handlers:
-                        h(ProceedingJoinPoint(context))
+                pjp = ProceedingMethod(context)
+                for handler in _handler_iter(aspects, AdviceType.Around, context):
+                    pjp = ProceedingHandler(handler, pjp, context)
+                context.return_value = pjp.proceed()
 
-                    context.result = func(self, *args, **kwargs)
             except Exception as e:
                 has_exception = True
                 context.exception = e
                 # 调用 AfterThrowing 钩子
-                for aspect in aspects:
-                    try:
-                        aspect.handle_point(AdviceType.AfterThrowing, context)
-                    except Exception as advice_error:
-                        import warnings
-                        warnings.warn(
-                            f"Aspect {aspect.uniq_id} after_throwing failed: {advice_error}")
-
+                for handler in _handler_iter(
+                    aspects, AdviceType.AfterThrowing, context
+                ):
+                    handler(context)
                 # 如果异常被抑制，不再抛出
                 if not context.suppressed:
                     # 可能已被替换
@@ -75,24 +92,16 @@ def join_method(f=None, **meta):
 
             # 成功时调用 AfterReturning 钩子
             if not has_exception:
-                for aspect in aspects:
-                    try:
-                        aspect.handle_point(AdviceType.AfterReturning, context)
-                    except Exception as e:
-                        import warnings
-                        warnings.warn(
-                            f"Aspect {aspect.uniq_id} after_returning failed: {e}")
+                for handler in _handler_iter(
+                    aspects, AdviceType.AfterReturning, context
+                ):
+                    handler(context)
 
-            # 最后调用 After 钩子（无论成功或失败）
-            for aspect in aspects:
-                try:
-                    aspect.handle_point(AdviceType.After, context)
-                except Exception as e:
-                    import warnings
-                    warnings.warn(
-                        f"Aspect {aspect.uniq_id} after failed: {e}")
+            # 最后调用 After 钩子（无论成功或失败，类似 finally）
+            for handler in _handler_iter(aspects, AdviceType.After, context):
+                handler(context)
 
-            return context.result
+            return context.return_value
 
         return wrapper
 
@@ -109,7 +118,7 @@ def join_property(f=None, **meta):
         private_attr = f"_{func.__name__}"
 
         # 提取已知参数
-        default = meta.pop('default', None)
+        default = meta.pop("default", None)
 
         def init(self, aspects: List[Aspect], context: JoinPropContext) -> None:
             if hasattr(self, private_attr):
@@ -117,8 +126,7 @@ def join_property(f=None, **meta):
             """获取属性值"""
             context.value = context.value or default
             for aspect in aspects:
-                handlers = aspect.get_handlers(
-                    AdviceType.BeforeInit, context)
+                handlers = aspect.get_handlers(AdviceType.BeforeInit, context)
                 for handler in handlers:
                     context.value = handler(context)
             setattr(self, private_attr, context.value)
@@ -127,17 +135,12 @@ def join_property(f=None, **meta):
             aspects = get_enable_aspects(self)
             """获取属性值"""
             # 构造上下文
-            context = JoinPropContext(
-                meta=meta,
-                instance=self,
-                method=func
-            )
+            context = JoinPropContext(meta=meta, instance=self, method=func)
             init(self, aspects, context)
 
             context.value = getattr(self, private_attr)
             for aspect in aspects:
-                handlers = aspect.get_handlers(
-                    AdviceType.AfterGet, context)
+                handlers = aspect.get_handlers(AdviceType.AfterGet, context)
                 for handler in handlers:
                     context.value = handler(context)
             return context.value
@@ -146,17 +149,13 @@ def join_property(f=None, **meta):
             """设置属性值"""
             aspects = get_enable_aspects(self)
             context = JoinPropContext(
-                meta=meta,
-                instance=self,
-                method=func,
-                value=value
+                meta=meta, instance=self, method=func, value=value
             )
             init(self, aspects, context)
 
             # 调用 BeforeSet 钩子
             for aspect in aspects:
-                handlers = aspect.get_handlers(
-                    AdviceType.BeforeSet, context)
+                handlers = aspect.get_handlers(AdviceType.BeforeSet, context)
                 for handler in handlers:
                     handler(context)
 
@@ -169,8 +168,7 @@ def join_property(f=None, **meta):
 
             # 调用 AfterSet 钩子
             for aspect in reversed(aspects):
-                handlers = aspect.get_handlers(
-                    AdviceType.AfterSet, context)
+                handlers = aspect.get_handlers(AdviceType.AfterSet, context)
                 for handler in handlers:
                     handler(context)
 
@@ -179,16 +177,11 @@ def join_property(f=None, **meta):
             if not hasattr(self, private_attr):
                 return
             aspects = get_enable_aspects(self)
-            context = JoinPropContext(
-                meta=meta,
-                method=func,
-                instance=self
-            )
+            context = JoinPropContext(meta=meta, method=func, instance=self)
 
             # 调用 BeforeDelete 钩子
             for aspect in aspects:
-                handlers = aspect.get_handlers(
-                    AdviceType.BeforeDelete, context)
+                handlers = aspect.get_handlers(AdviceType.BeforeDelete, context)
                 for handler in handlers:
                     handler(context)
 
@@ -201,8 +194,7 @@ def join_property(f=None, **meta):
 
             # 调用 AfterDelete 钩子
             for aspect in reversed(aspects):
-                handlers = aspect.get_handlers(
-                    AdviceType.AfterDelete, context)
+                handlers = aspect.get_handlers(AdviceType.AfterDelete, context)
                 for handler in handlers:
                     handler(context)
 

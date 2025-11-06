@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 AOP方式实现LRU Cache切面
-展示如何用around_method_return实现缓存功能
+展示如何用 around 实现缓存功能
 """
 
 import time
 import hashlib
 import json
 from collections import OrderedDict
-from aoplib import Aspect, around_method_return, add_aspect
-from aoplib.joins import join_method
+from aoplib import Aspect, around, add_aspect
+from aoplib.joins import join_method, ProceedingJoinPoint
 from aoplib.context import JoinMethodContext
 
 
@@ -56,7 +56,7 @@ class LRUCacheAspect(Aspect):
     """
     LRU缓存切面
     
-    使用 @around_method_return 拦截方法返回值
+    使用 @around 拦截方法执行
     实现透明的缓存功能
     """
     
@@ -78,24 +78,27 @@ class LRUCacheAspect(Aspect):
         key_str = "|".join(key_parts)
         return hashlib.md5(key_str.encode()).hexdigest()[:16]
     
-    @around_method_return
-    def cache_result(self, context: JoinMethodContext):
-        """拦截方法返回值，使用缓存"""
+    @around
+    def cache_result(self, pjp: ProceedingJoinPoint):
+        """拦截方法执行，使用缓存"""
         if not self.enabled:
-            return  # 缓存已禁用
+            return pjp.proceed()  # 缓存已禁用，继续执行
         
-        cache_key = self._make_cache_key(context)
+        cache_key = self._make_cache_key(pjp.context)
         
         # 尝试从缓存获取
         cached_value = self.cache.get(cache_key)
         
         if cached_value is not None:
-            print(f"  ⚡ [缓存命中] {context.method.__name__}{context.args}")
-            context.result = cached_value  # 用缓存值替换
+            print(f"  ⚡ [缓存命中] {pjp.context.method.__name__}{pjp.context.args}")
+            return cached_value  # 直接返回缓存值
         else:
-            print(f"  💾 [缓存写入] {context.method.__name__}{context.args} = {context.result}")
+            # 执行原方法
+            result = pjp.proceed()
+            print(f"  💾 [缓存写入] {pjp.context.method.__name__}{pjp.context.args} = {result}")
             # 保存到缓存
-            self.cache.put(cache_key, context.result)
+            self.cache.put(cache_key, result)
+            return result
     
     def get_stats(self):
         """获取缓存统计信息"""
@@ -156,7 +159,7 @@ result2 = math_service.fibonacci(10)
 time2 = (time.time() - start) * 1000
 
 print(f"\n结果: {result2}, 耗时: {time2:.2f}ms")
-print(f"性能提升: {time1 / time2:.1f}x 倍")
+# print(f"性能提升: {time1 / time2:.1f}x 倍")
 
 print(f"\n缓存统计: {cache_aspect.get_stats()}")
 
@@ -210,7 +213,7 @@ user2 = api_service.get_user(123)
 time2 = (time.time() - start) * 1000
 print(f"耗时: {time2:.0f}ms")
 
-print(f"\n加速比: {time1 / time2:.0f}x")
+# print(f"\n加速比: {time1 / time2:.0f}x")
 
 print("\n3. 多次搜索测试")
 api_service.search("python", page=1)
@@ -300,6 +303,12 @@ print("""
 【与 @lru_cache 对比】
   内置 @lru_cache: 简单、快速，适合纯函数
   AOP LRUCacheAspect: 灵活、可控，适合企业应用
+  
+【Around 通知说明】
+  @around 接收 ProceedingJoinPoint 参数
+  - 调用 pjp.proceed() 执行原方法
+  - 返回值会成为最终结果
+  - 可以在执行前后做任何处理
 """)
 
 

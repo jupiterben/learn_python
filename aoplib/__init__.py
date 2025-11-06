@@ -5,7 +5,7 @@ aoplib - 动态Joinpoint特性系统
 """
 from .joins import join_method, join_property
 from .context import JoinMethodContext
-from .joincut import with_name
+from .pointcut import with_name
 from .aspect import (
     Aspect,
     aop_class,
