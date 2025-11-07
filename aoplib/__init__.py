@@ -5,7 +5,7 @@ aoplib - 动态Joinpoint特性系统
 """
 from .joins import JoinMethod, ProceedingJoinPoint, JoinProperty
 from .context import JoinMethodContext, JoinPropContext
-from .pointcut import with_name
+from .pointcut import with_name, with_tag
 from .aspect import (
     Aspect,
     aop_class,
@@ -53,6 +53,7 @@ __all__ = [
     'add_aspect',
     'remove_aspect',
     'get_aspect',
-    'with_name'
+    'with_name',
+    'with_tag'
 ]
 __version__ = '0.3.0'

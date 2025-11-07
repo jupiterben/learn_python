@@ -85,7 +85,11 @@ class Service:
     def name(self):
         return self._name
 
-    @JoinMethod
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    @JoinMethod()
     def login(self):
         self.name = "张三"
         print(self.name)

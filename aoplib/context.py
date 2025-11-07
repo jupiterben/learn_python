@@ -13,6 +13,14 @@ class JoinContext:
     meta: dict  # JoinPoint信息
     instance: Any  # 对象实例(self)
 
+    @property
+    def name(self):
+        return self.method.__qualname__
+
+    @property
+    def short_name(self):
+        return self.meta.get("name") or self.method.__name__
+
 
 @dataclass
 class JoinMethodContext(JoinContext):
@@ -23,14 +31,6 @@ class JoinMethodContext(JoinContext):
     return_value: Any = None  # 方法返回值()
     exception: Optional[Exception] = None  # 异常对象(如有)
     suppressed: bool = False  # 异常是否被抑制（不再传播）
-
-    @property
-    def name(self):
-        return self.method.__qualname__
-
-    @property
-    def short_name(self):
-        return self.meta.get("name") or self.method.__name__
 
     def suppress_exception(self):
         """标记异常已处理，不再向外传播"""
@@ -49,10 +49,6 @@ class JoinPropContext(JoinContext):
     value: Any = None
     skip_set: bool = False  # 是否跳过属性设置
     skip_delete: bool = False  # 是否跳过属性删除
-
-    @property
-    def name(self):
-        return self.method.__qualname__
 
     def skip_setter(self):
         """标记跳过属性设置（用于before_property_set验证失败时）"""

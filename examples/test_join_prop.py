@@ -1,49 +1,36 @@
 
 
-from aoplib import Aspect, JoinProperty, add_aspect, after_set, before_init, before_set, with_name
-
-
-class TestJoinProp:
-    def __init__(self, name, value):
-        self.name = name
-        self.value = value
-
-    def __str__(self):
-        return f"{self.name}={self.value}"
-
-    def __repr__(self):
-        return f"TestJoinProp(name={self.name}, value={self.value})"
-
-    @JoinProperty(tags=[])
-    def name_value(self):
-        return f"{self.name}={self.value}"
-
-    @name_value.setter
-    def name_value(self, value):
-        self.name, self.value = value.split("=")
-
-    @JoinProperty
-    def some(self):
-        return self.name
+from aoplib import Aspect, JoinProperty, add_aspect, after_set, aop_class, before_init, before_set, with_name
 
 
 class PropAspect(Aspect):
     @before_init
-    def before(self, context):
+    def init(self, context):
         print("before init")
+        return context.value
 
-    @before_set(with_name("name_value"))
+    @before_set
     def before_set_value(self, context):
         print("before set")
 
-    @after_set(with_name("name_value"))
+    @after_set
     def after_set_value(self, context):
         print("after set")
 
 
-if __name__ == '__main__':
-    t = TestJoinProp("name", "value")
-    add_aspect(t, PropAspect())
-    print(t.name_value)
+class TestJoin:
+    _aspects = [PropAspect()]
+    name = JoinProperty(default="d_name", tags=[])
 
-    t.name_value = "new_name=new_value"
+    def __init__(self, name, value):
+        self.name = name
+
+
+if __name__ == '__main__':
+    t = TestJoin("name", "value")
+    print(t.name)
+
+    t2 = TestJoin("name2", "value2")
+
+    print(t2.name)
+    print(t.name)

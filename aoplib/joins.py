@@ -51,34 +51,17 @@ def _handler_iter(aspects: List[Aspect], type: AdviceType, context: JoinMethodCo
 
 
 class JoinMethod:
-    """
-    类版本的 join_method，类似 Python 内置的 property
-
-    支持两种用法：
-    1. 装饰器方式：@join_method
-    2. 类方式：name = JoinMethod(func, **meta)
-    """
-
-    def __init__(self, func: Callable = None, **meta):
-        """
-        参数:
-            func: 被装饰的方法
-            **meta: 额外的元数据
-        """
-        self.func = func
-        self.meta = meta
-        self.name = None  # 将在 __set_name__ 中设置
 
     def __call__(self, func: Callable = None, **meta) -> Any:
         """
         装饰器支持，允许 @JoinMethod 或 @JoinMethod(**meta) 的用法
-        
+
         用法1: @JoinMethod
         用法2: @JoinMethod(tags=["important"])
         """
         # 合并 self.meta 和传入的 meta（传入的优先级更高）
         merged_meta = {**self.meta, **meta}
-        
+
         if func is not None and callable(func):
             # 实例被调用：instance(func)，func 是被装饰的函数
             instance = type(self)(func=func, **merged_meta)
@@ -92,6 +75,16 @@ class JoinMethod:
                 instance.name = f.__name__
                 return instance
             return decorator
+
+    def __init__(self, func: Callable = None, **meta):
+        """
+        参数:
+            func: 被装饰的方法
+            **meta: 额外的元数据
+        """
+        self.func = func
+        self.meta = meta
+        self.name = None  # 将在 __set_name__ 中设置
 
     def __set_name__(self, owner, name):
         """设置方法名称"""
@@ -168,7 +161,6 @@ class JoinMethod:
         return MethodType(wrapper, instance)
 
 
-
 # 属性相关的 AOP 钩子
 def _apply_hooks(
     instance,
@@ -210,26 +202,27 @@ class JoinProperty:
     1. 装饰器方式：@join_property
     2. 类方式：name = JoinProperty(fget=..., fset=..., fdel=..., default=...)
     """
+
     def __call__(self, fget: Callable = None, **meta) -> Any:
         """
         装饰器支持，允许 @JoinProperty 或 @JoinProperty(**meta) 的用法
-        
+
         用法1: @JoinProperty
         用法2: @JoinProperty(default=value, tags=["tag"])
         """
         # 合并 self.meta 和传入的 meta（传入的优先级更高）
         merged_meta = {**self.meta, **meta}
-        
+
         if fget is not None and callable(fget):
             # 实例被调用：instance(func)，fget 是被装饰的函数
             return type(self)(fget=fget, fset=self.fset, fdel=self.fdel,
-                            doc=self.__doc__, default=self.default, **merged_meta)
+                              doc=self.__doc__, default=self.default, **merged_meta)
         else:
             # 有括号用法：@JoinProperty(**meta) 返回的实例再次被调用
             # 返回一个装饰器函数
             def decorator(func: Callable) -> 'JoinProperty':
                 return type(self)(fget=func, fset=self.fset, fdel=self.fdel,
-                                doc=self.__doc__, default=self.default, **merged_meta)
+                                  doc=self.__doc__, default=self.default, **merged_meta)
             return decorator
 
     def __init__(
@@ -308,10 +301,6 @@ class JoinProperty:
 
     def __set__(self, instance, value):
         """描述符协议：设置属性值"""
-        # 如果没有 setter，抛出异常（只读属性）
-        if self.fset is None:
-            raise AttributeError("can't set attribute")
-
         context = JoinPropContext(
             meta=self.meta,
             instance=instance,
@@ -328,6 +317,12 @@ class JoinProperty:
         # 检查是否跳过设置
         if context.skip_set:
             return
+
+        if context.meta.get("optimize_set", True):
+            old_store_value = self.fget(instance) if self.fget else getattr(
+                instance, self.private_attr)
+            if old_store_value == context.value:
+                return
 
         # 执行实际的设置
         if self.fset:
