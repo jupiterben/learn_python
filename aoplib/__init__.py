@@ -3,8 +3,8 @@ aoplib - 动态Joinpoint特性系统
 
 提供AOP拦截器，支持插件化架构
 """
-from .joins import join_method, join_property
-from .context import JoinMethodContext
+from .joins import JoinMethod, ProceedingJoinPoint, JoinProperty
+from .context import JoinMethodContext, JoinPropContext
 from .pointcut import with_name
 from .aspect import (
     Aspect,
@@ -29,8 +29,8 @@ from .aspect import (
 )
 
 __all__ = [
-    'join_method',
-    'join_property',
+    'JoinMethod',
+    'JoinProperty',
     'Aspect',
     'aop_class',
     # 方法通知
@@ -48,6 +48,8 @@ __all__ = [
     'after_delete',
     # 其他
     'JoinMethodContext',
+    'JoinPropContext',
+    'ProceedingJoinPoint',
     'add_aspect',
     'remove_aspect',
     'get_aspect',

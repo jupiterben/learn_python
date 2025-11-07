@@ -5,19 +5,19 @@
 
 from aoplib import (
     Aspect,
+    JoinMethod,
     JoinMethodContext,
+    JoinPropContext,
+    ProceedingJoinPoint,
     after_set,
     before,
     after,
     around,
     before_init,
-    join_method,
-    join_property,
+    JoinProperty,
     aop_class,
+    with_name,
 )
-from aoplib.context import JoinPropContext
-from aoplib.joins import ProceedingJoinPoint
-from aoplib.pointcut import with_name
 
 
 class LogAspect(Aspect):
@@ -79,32 +79,33 @@ class LocalStoreProps(Aspect):
 class Service:
     def __init__(self):
         super().__init__()
+        self._name = "李四"
 
-    @join_property
+    @JoinProperty
     def name(self):
-        pass
+        return self._name
 
-    @join_method
+    @JoinMethod
     def login(self):
         self.name = "张三"
         print(self.name)
         return "登录阶段"
 
-    @join_method
+    @JoinMethod
     def logout(self):
         return "登出阶段"
 
-    @join_method
+    @JoinMethod
     def register(self):
         return "注册阶段"
 
-    @join_method
+    @JoinMethod
     def test(self):
         return "测试阶段"
 
 
 class Service2:
-    @join_method
+    @JoinMethod
     def login(self):
         return "登录中..."
 
