@@ -1,6 +1,13 @@
-
-
-from aoplib import Aspect, JoinProperty, add_aspect, after_set, aop_class, before_init, before_set, with_name
+from aoplib import (
+    Aspect,
+    JoinProperty,
+    add_aspect,
+    after_set,
+    aop_class,
+    before_init,
+    before_set,
+    with_name,
+)
 
 
 class PropAspect(Aspect):
@@ -19,14 +26,14 @@ class PropAspect(Aspect):
 
 
 class TestJoin:
-    _aspects = [PropAspect()]
-    name = JoinProperty(default="d_name", tags=[])
+    name = JoinProperty(tags=[])
 
     def __init__(self, name, value):
+        add_aspect(self, PropAspect())
         self.name = name
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     t = TestJoin("name", "value")
     print(t.name)
 
